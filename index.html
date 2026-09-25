@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo de Parkour 3D</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background-color: #000;
+        }
+
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 8px;
+            height: 8px;
+            background-color: white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            box-shadow: 0 0 4px rgba(0,0,0,0.5);
+        }
+
+        #instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px 40px;
+            border-radius: 10px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        #hud {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            font-family: monospace;
+            font-size: 14px;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="crosshair"></div>
+    <div id="instructions">
+        <h2>CLIQUE PARA JOGAR</h2>
+        <p><b>W, A, S, D</b> - Movimento</p>
+        <p><b>ESPAÇO</b> - Pular / Wallrun (correr na parede)</p>
+        <p><b>MOUSE</b> - Olhar ao redor</p>
+    </div>
+    <div id="hud">Status: Chão</div>
+
+    <!-- Importação da biblioteca Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        // --- CONFIGURAÇÃO INICIAL DA CENA ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb); // Cor do céu (Skyblue)
+        scene.fog = new THREE.FogExp2(0x87ceeb, 0.015);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // --- ILUMINAÇÃO ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(20, 40, 20);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+
+        // --- CENÁRIO E OBSTÁCULOS ---
+        const walls = [];
+
+        // Chão principal
+        const floorGeo = new THREE.PlaneGeometry(200, 200);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // Função para criar prédios/paredes de parkour
+        function createBuilding(x, z, width, height, depth, color = 0x7a7a7a) {
+            const geo = new THREE.BoxGeometry(width, height, depth);
+            const mat = new THREE.MeshStandardMaterial({ color: color });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x, height / 2, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+
+            // Bounding box para colisão
+            mesh.geometry.computeBoundingBox();
+            walls.push(mesh);
+        }
+
+        // Criando circuito de parkour
+        createBuilding(0, -20, 10, 15, 20, 0xd9534f);  // Prédio vermelho inicial
+        createBuilding(12, -35, 2, 20, 25, 0x428bca);  // Parede azul para Wallrun (direita)
+        createBuilding(-12, -55, 2, 20, 25, 0x428bca); // Parede azul para Wallrun (esquerda)
+        createBuilding(0, -75, 15, 25, 15, 0x5cb85c);  // Plataforma verde final
+
+        // --- CONTROLES E FÍSICA ---
+        const player = {
+            height: 1.8,
+            speed: 12,
+            jumpForce: 10,
+            velocity: new THREE.Vector3(),
+            onGround: false,
+            isWallRunning: false
+        };
+
+        camera.position.set(0, player.height, 10);
+
+        const keys = {};
+        let isLocked = false;
+
+        // Pointer Lock (travar o mouse na tela)
+        const instructions = document.getElementById('instructions');
+        const hud = document.getElementById('hud');
+
+        instructions.addEventListener('click', () => {
+            document.body.requestPointerLock();
+        });
+
+        document.addEventListener('pointerlockchange', () => {
+            if (document.pointerLockElement === document.body) {
+                isLocked = true;
+                instructions.style.display = 'none';
+            } else {
+                isLocked = false;
+                instructions.style.display = 'block';
+            }
+        });
+
+        // Controles de Teclado
+        document.addEventListener('keydown', (e) => keys[e.code] = true);
+        document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+        // Rotação da Câmera com o Mouse
+        let yaw = 0;
+        let pitch = 0;
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isLocked) return;
+
+            const sensitivity = 0.002;
+            yaw -= e.movementX * sensitivity;
+            pitch -= e.movementY * sensitivity;
+
+            // Limitar olhar para cima/baixo
+            pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
+
+            camera.rotation.order = 'YXZ';
+            camera.rotation.y = yaw;
+            camera.rotation.x = pitch;
+        });
+
+        // --- LOOP DE ATUALIZAÇÃO DO JOGO ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+
+            if (isLocked) {
+                // Vetores de direção da câmera
+                const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+                const side = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+
+                // Movimento do jogador
+                const moveDir = new THREE.Vector3();
+                if (keys['KeyW']) moveDir.add(forward);
+                if (keys['KeyS']) moveDir.sub(forward);
+                if (keys['KeyD']) moveDir.add(side);
+                if (keys['KeyA']) moveDir.sub(side);
+                moveDir.normalize();
+
+                // Aplicação da velocidade de movimento
+                camera.position.x += moveDir.x * player.speed * delta;
+                camera.position.z += moveDir.z * player.speed * delta;
+
+                // --- SISTEMA DE WALLRUN E DETECÇÃO DE PAREDES ---
+                player.isWallRunning = false;
+                let nearWall = false;
+
+                // Raycasting simples para detectar paredes próximas
+                const raycaster = new THREE.Raycaster();
+                const directions = [side, side.clone().negate()]; // Direita e Esquerda
+
+                for (let dir of directions) {
+                    raycaster.set(camera.position, dir);
+                    const intersects = raycaster.intersectObjects(walls);
+
+                    if (intersects.length > 0 && intersects[0].distance < 2.0 && !player.onGround) {
+                        nearWall = true;
+                        // Se estiver caindo e apertando W perto de uma parede -> Wallrun
+                        if (player.velocity.y < 2 && keys['KeyW']) {
+                            player.isWallRunning = true;
+                            player.velocity.y = -0.5; // Gravidade reduzida na parede
+                        }
+                    }
+                }
+
+                // Aplicação de Gravidade
+                if (!player.isWallRunning) {
+                    player.velocity.y -= 25 * delta; // Gravidade padrão
+                }
+
+                // Pulo
+                if (keys['Space']) {
+                    if (player.onGround) {
+                        player.velocity.y = player.jumpForce;
+                        player.onGround = false;
+                    } else if (player.isWallRunning) {
+                        player.velocity.y = player.jumpForce * 0.9;
+                        player.isWallRunning = false;
+                    }
+                }
+
+                // Atualizar posição Y
+                camera.position.y += player.velocity.y * delta;
+
+                // Colisão simples com o Chão
+                if (camera.position.y <= player.height) {
+                    camera.position.y = player.height;
+                    player.velocity.y = 0;
+                    player.onGround = true;
+                } else {
+                    player.onGround = false;
+                }
+
+                // Atualização da HUD
+                if (player.isWallRunning) {
+                    hud.innerText = "Status: Wallrunning!";
+                    hud.style.color = "#5bc0de";
+                } else if (player.onGround) {
+                    hud.innerText = "Status: Chão";
+                    hud.style.color = "white";
+                } else {
+                    hud.innerText = "Status: No Ar";
+                    hud.style.color = "#f0ad4e";
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Ajustar tela ao redimensionar o navegador
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
