@@ -38,7 +38,8 @@
     <div id="ui">
         <h1 style="margin-bottom: 15px;">PARKOUR 3D</h1>
         <p style="margin-bottom: 10px;">Clique na tela para iniciar</p>
-        <p><b>WASD</b>: Mover | <b>ESPAÇO</b>: Pular / Wallrun | <b>MOUSE</b>: Olhar</p>
+        <p><b>WASD</b>: Mover | <b>ESPAÇO</b>: Pular / Wallrun</p>
+        <p><b>SHIFT / CTRL</b>: Deslizar (Slide) | <b>MOUSE</b>: Olhar</p>
     </div>
     <div id="hud">STATUS: NO CHÃO</div>
 
@@ -58,7 +59,6 @@
         }
         window.addEventListener('resize', resize);
 
-        // Shaders para Iluminação e Gráficos 3D
         const vsSource = `
             attribute vec3 aPosition;
             attribute vec3 aNormal;
@@ -94,14 +94,12 @@
                 vec3 norm = normalize(vNormal);
                 vec3 lightDir = normalize(uLightPos - vPosition);
                 
-                // Iluminação Difusa + Ambiente
                 float diff = max(dot(norm, lightDir), 0.2);
                 vec3 ambient = vec3(0.3, 0.3, 0.35);
                 vec3 lighting = ambient + vec3(0.8, 0.8, 0.7) * diff;
 
-                // Nevoeiro para Profundidade
                 float dist = length(vPosition);
-                float fogFactor = clamp((dist - 10.0) / 80.0, 0.0, 1.0);
+                float fogFactor = clamp((dist - 10.0) / 100.0, 0.0, 1.0);
                 vec3 fogColor = vec3(0.5, 0.7, 0.9);
 
                 vec3 finalColor = mix(vColor * lighting, fogColor, fogFactor);
@@ -122,7 +120,6 @@
         gl.linkProgram(program);
         gl.useProgram(program);
 
-        // Matrizes Matemáticas
         const Mat4 = {
             perspective: (fov, aspect, near, far) => {
                 const f = 1.0 / Math.tan(fov / 2);
@@ -135,15 +132,6 @@
                 ];
             },
             identity: () => [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1],
-            multiply: (a, b) => {
-                let out = new Float32Array(16);
-                for (let i = 0; i < 4; i++) {
-                    for (let j = 0; j < 4; j++) {
-                        out[i*4 + j] = a[i*4+0]*b[0*4+j] + a[i*4+1]*b[1*4+j] + a[i*4+2]*b[2*4+j] + a[i*4+3]*b[3*4+j];
-                    }
-                }
-                return out;
-            },
             lookAt: (eye, target, up) => {
                 let z = normalize(sub(eye, target));
                 let x = normalize(cross(up, z));
@@ -162,7 +150,7 @@
         function dot(a, b) { return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]; }
         function normalize(v) { let len = Math.hypot(...v); return len > 0 ? [v[0]/len, v[1]/len, v[2]/len] : [0,0,0]; }
 
-        // --- CONSTRUÇÃO DO CENÁRIO 3D ---
+        // --- CONSTRUÇÃO DO CENÁRIO ---
         let vertices = [], normals = [], colors = [];
         const blocks = [];
 
@@ -174,17 +162,11 @@
             const z1 = z - d/2, z2 = z + d/2;
 
             const faces = [
-                // Frontal
                 [x1,y1,z2, x2,y1,z2, x2,y2,z2, x1,y1,z2, x2,y2,z2, x1,y2,z2, 0,0,1],
-                // Traseira
                 [x2,y1,z1, x1,y1,z1, x1,y2,z1, x2,y1,z1, x1,y2,z1, x2,y2,z1, 0,0,-1],
-                // Topo
                 [x1,y2,z1, x1,y2,z2, x2,y2,z2, x1,y2,z1, x2,y2,z2, x2,y2,z1, 0,1,0],
-                // Base
                 [x1,y1,z1, x2,y1,z1, x2,y1,z2, x1,y1,z1, x2,y1,z2, x1,y1,z2, 0,-1,0],
-                // Direita
                 [x2,y1,z1, x2,y2,z1, x2,y2,z2, x2,y1,z1, x2,y2,z2, x2,y1,z2, 1,0,0],
-                // Esquerda
                 [x1,y1,z1, x1,y1,z2, x1,y2,z2, x1,y1,z1, x1,y2,z2, x1,y2,z1, -1,0,0]
             ];
 
@@ -197,14 +179,19 @@
             });
         }
 
-        // Criando o mapa de Parkour
+        // --- MAPA EXPANDIDO DE PARKOUR ---
         addBox(0, -1, 0, 40, 2, 40, [0.2, 0.2, 0.2]); // Chão principal
         addBox(0, 4, -15, 10, 8, 10, [0.8, 0.2, 0.2]); // Bloco inicial
-        addBox(12, 8, -30, 2, 16, 20, [0.2, 0.5, 0.8]); // Parede de Wallrun (Direita)
-        addBox(-12, 12, -50, 2, 20, 20, [0.2, 0.5, 0.8]); // Parede de Wallrun (Esquerda)
-        addBox(0, 15, -75, 16, 2, 16, [0.2, 0.8, 0.3]); // Plataforma Final
+        addBox(12, 8, -30, 2, 16, 20, [0.2, 0.5, 0.8]); // Wallrun 1 (Direita)
+        
+        // Novos Obstáculos
+        addBox(0, 10, -42, 6, 2, 6, [0.9, 0.6, 0.1]); // Pilar intermediário
+        addBox(-12, 12, -55, 2, 20, 22, [0.2, 0.5, 0.8]); // Wallrun 2 (Esquerda)
+        addBox(-2, 13, -72, 8, 2, 8, [0.9, 0.6, 0.1]); // Plataforma elevada
+        addBox(10, 15, -88, 8, 2, 8, [0.9, 0.6, 0.1]); // Plataforma em balanço
+        
+        addBox(0, 17, -110, 20, 2, 20, [0.2, 0.8, 0.3]); // Plataforma Final
 
-        // Buffers WebGL
         function bindBuffer(data, loc, size) {
             const b = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, b);
@@ -226,14 +213,18 @@
         gl.enable(gl.DEPTH_TEST);
         resize();
 
-        // --- SISTEMA DE FÍSICA E CONTROLES ---
+        // --- SISTEMA DE FÍSICA E MECÂNICAS ---
         const player = {
             pos: [0, 3, 10],
             vel: [0, 0, 0],
             radius: 0.6,
-            height: 1.8,
+            standingEyeHeight: 1.8,
+            slidingEyeHeight: 0.9,
+            currentEyeHeight: 1.8,
             onGround: false,
-            wallRunning: false
+            wallRunning: false,
+            isSliding: false,
+            slideTimer: 0
         };
 
         let yaw = 0, pitch = 0;
@@ -258,13 +249,11 @@
         window.addEventListener('keydown', e => keys[e.code] = true);
         window.addEventListener('keyup', e => keys[e.code] = false);
 
-        // Checagem de Colisão AABB x Esfera
         function checkCollisions() {
             player.onGround = false;
             player.wallRunning = false;
 
             for (let b of blocks) {
-                // Ponto mais próximo da caixa em relação ao jogador
                 let cx = Math.max(b.min[0], Math.min(player.pos[0], b.max[0]));
                 let cy = Math.max(b.min[1], Math.min(player.pos[1], b.max[1]));
                 let cz = Math.max(b.min[2], Math.min(player.pos[2], b.max[2]));
@@ -272,14 +261,11 @@
                 let dist = Math.hypot(player.pos[0] - cx, player.pos[1] - cy, player.pos[2] - cz);
 
                 if (dist < player.radius) {
-                    // Colisão Vertical (Chão)
                     if (player.pos[1] > b.max[1] - 0.2 && player.vel[1] <= 0) {
                         player.pos[1] = b.max[1] + player.radius;
                         player.vel[1] = 0;
                         player.onGround = true;
-                    } 
-                    // Colisão Lateral (Paredes / Wallrun)
-                    else {
+                    } else {
                         let nx = player.pos[0] - cx;
                         let nz = player.pos[2] - cz;
                         let len = Math.hypot(nx, nz);
@@ -289,17 +275,15 @@
                             player.pos[2] = cz + (nz / len) * player.radius;
                         }
 
-                        // Wallrun ativado se estiver caindo e pressionando W
                         if (!player.onGround && player.vel[1] < 0 && keys['KeyW']) {
                             player.wallRunning = true;
-                            player.vel[1] = -0.05; // Queda lenta na parede
+                            player.vel[1] = -0.05;
                         }
                     }
                 }
             }
         }
 
-        // Loop de Atualização
         let lastTime = performance.now();
 
         function update() {
@@ -308,7 +292,6 @@
             lastTime = now;
 
             if (document.pointerLockElement === canvas) {
-                // Vetores de Direção
                 let dx = Math.sin(yaw), dz = Math.cos(yaw);
                 let moveX = 0, moveZ = 0;
 
@@ -317,7 +300,27 @@
                 if (keys['KeyA']) { moveX -= dz; moveZ += dx; }
                 if (keys['KeyD']) { moveX += dz; moveZ -= dx; }
 
+                // Sistema de Slide
+                const slideKeyPressed = keys['ShiftLeft'] || keys['ControlLeft'];
                 let speed = 12.0;
+
+                if (slideKeyPressed && player.onGround && (moveX !== 0 || moveZ !== 0) && !player.isSliding) {
+                    player.isSliding = true;
+                    player.slideTimer = 0.6; // Duração do impulso do slide
+                }
+
+                if (player.isSliding) {
+                    player.slideTimer -= dt;
+                    speed = 18.0; // Velocidade extra no slide
+                    player.currentEyeHeight = player.slidingEyeHeight;
+
+                    if (player.slideTimer <= 0 || !player.onGround) {
+                        player.isSliding = false;
+                    }
+                } else {
+                    player.currentEyeHeight = player.standingEyeHeight;
+                }
+
                 player.pos[0] += moveX * speed * dt;
                 player.pos[2] += moveZ * speed * dt;
 
@@ -331,6 +334,7 @@
                     if (player.onGround) {
                         player.vel[1] = 10.0;
                         player.onGround = false;
+                        player.isSliding = false;
                     } else if (player.wallRunning) {
                         player.vel[1] = 9.0;
                         player.wallRunning = false;
@@ -343,12 +347,16 @@
                 if (player.pos[1] < -20) {
                     player.pos = [0, 3, 10];
                     player.vel = [0, 0, 0];
+                    player.isSliding = false;
                 }
 
                 checkCollisions();
 
                 // Atualizar HUD
-                if (player.wallRunning) {
+                if (player.isSliding) {
+                    hud.innerText = "STATUS: SLIDING!";
+                    hud.style.color = "#e040fb";
+                } else if (player.wallRunning) {
                     hud.innerText = "STATUS: WALLRUNNING!";
                     hud.style.color = "#40c4ff";
                 } else if (player.onGround) {
@@ -364,13 +372,15 @@
             gl.clearColor(0.5, 0.7, 0.9, 1.0);
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+            let cameraPos = [player.pos[0], player.pos[1] + (player.currentEyeHeight - player.standingEyeHeight), player.pos[2]];
+
             let target = [
-                player.pos[0] - Math.sin(yaw) * Math.cos(pitch),
-                player.pos[1] + Math.sin(pitch),
-                player.pos[2] - Math.cos(yaw) * Math.cos(pitch)
+                cameraPos[0] - Math.sin(yaw) * Math.cos(pitch),
+                cameraPos[1] + Math.sin(pitch),
+                cameraPos[2] - Math.cos(yaw) * Math.cos(pitch)
             ];
 
-            let view = Mat4.lookAt(player.pos, target, [0, 1, 0]);
+            let view = Mat4.lookAt(cameraPos, target, [0, 1, 0]);
             let proj = Mat4.perspective(1.2, canvas.width / canvas.height, 0.1, 100.0);
 
             gl.uniformMatrix4fv(uModel, false, Mat4.identity());
