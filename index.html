@@ -1,398 +1,573 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jogo de Parkour 3D Realista</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { overflow: hidden; background-color: #000; font-family: sans-serif; }
-        canvas { display: block; width: 100vw; height: 100vh; }
-        
-        #crosshair {
-            position: absolute; top: 50%; left: 50%;
-            width: 6px; height: 6px; background: #fff;
-            border-radius: 50%; transform: translate(-50%, -50%);
-            pointer-events: none; border: 1px solid #000;
-        }
+<meta charset="UTF-8">
+<title>Esconde-Esconde: Vira Objeto! v2</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    color: #fff;
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100vh; padding: 14px; user-select: none;
+  }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; text-align: center; }
+  .sub { color: #aaa; font-size: 0.82rem; margin-bottom: 10px; text-align: center; }
 
-        #ui {
-            position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            color: #fff; text-align: center;
-            background: rgba(0, 0, 0, 0.85); padding: 30px;
-            border-radius: 8px; cursor: pointer; user-select: none;
-            border: 1px solid #444; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-        }
+  #hud {
+    display: flex; gap: 14px; margin-bottom: 8px; flex-wrap: wrap; justify-content: center;
+    background: rgba(255,255,255,0.08); padding: 8px 16px; border-radius: 12px; font-size: 0.85rem;
+  }
+  #hud .p1 { color: #4ade80; font-weight: bold; }
+  #hud .p2 { color: #60a5fa; font-weight: bold; }
+  #hud .danger { color: #f87171; }
+  #hud .ok { color: #4ade80; }
 
-        #hud {
-            position: absolute; bottom: 20px; left: 20px;
-            color: #fff; font-family: monospace; font-size: 16px;
-            background: rgba(0,0,0,0.6); padding: 12px 20px; border-radius: 4px;
-        }
-    </style>
+  #arena {
+    position: relative; width: 94vw; max-width: 820px; height: 480px;
+    background: linear-gradient(180deg, #2d3e50 0%, #1e2a38 68%, #3d2f1f 68%, #4a3826 100%);
+    border-radius: 16px; overflow: hidden;
+    box-shadow: 0 0 40px rgba(0,0,0,0.6), inset 0 0 60px rgba(0,0,0,0.4);
+  }
+
+  .obj {
+    position: absolute; display: flex; align-items: center; justify-content: center;
+    font-size: 32px; filter: drop-shadow(2px 3px 2px rgba(0,0,0,0.5));
+  }
+
+  .player {
+    position: absolute; width: 42px; height: 42px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; border-radius: 50%; z-index: 20;
+    transition: left 0.1s, top 0.1s;
+  }
+  .player.p1.disguised { border: 2px dashed rgba(74,222,128,0.8); animation: pulseG 1.2s infinite; }
+  .player.p2.disguised { border: 2px dashed rgba(96,165,250,0.8); animation: pulseB 1.2s infinite; }
+  .player.hit { animation: shake 0.4s; border: 3px solid #f87171 !important; }
+  @keyframes pulseG { 0%,100%{box-shadow:0 0 0 0 rgba(74,222,128,0.4);} 50%{box-shadow:0 0 0 10px rgba(74,222,128,0);} }
+  @keyframes pulseB { 0%,100%{box-shadow:0 0 0 0 rgba(96,165,250,0.4);} 50%{box-shadow:0 0 0 10px rgba(96,165,250,0);} }
+  @keyframes shake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-6px);} 75%{transform:translateX(6px);} }
+
+  .seekerEye {
+    position: absolute; width: 76px; height: 76px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #fff 0%, #ffdd55 40%, #ff8800 70%, #cc3300 100%);
+    box-shadow: 0 0 30px rgba(255,120,0,0.8);
+    display: none; z-index: 30; pointer-events: none;
+  }
+  .seekerEye::after { content:''; position:absolute; width:32px; height:32px; background:#111; border-radius:50%; top:22px; left:22px; }
+  .seekerEye::before { content:''; position:absolute; width:10px; height:10px; background:#fff; border-radius:50%; top:29px; left:32px; z-index:2; }
+  .seekerEye.active { display: block; }
+  .seekerEye.blue { background: radial-gradient(circle at 40% 35%, #fff 0%, #99ddff 40%, #3399ff 70%, #0055cc 100%); box-shadow: 0 0 30px rgba(80,180,255,0.8); }
+
+  .powerup {
+    position: absolute; width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px; z-index: 15;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.1);
+    border: 2px solid rgba(255,215,0,0.6);
+    box-shadow: 0 0 16px rgba(255,215,0,0.5);
+    animation: float 1.8s ease-in-out infinite;
+  }
+  @keyframes float { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-6px);} }
+
+  #panel {
+    display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center; align-items: center;
+  }
+  .disguise-btn {
+    font-size: 24px; padding: 8px 12px; background: rgba(255,255,255,0.1);
+    border: 2px solid rgba(255,255,255,0.2); border-radius: 10px; cursor: pointer;
+    transition: all 0.15s; color: #fff;
+  }
+  .disguise-btn:hover { background: rgba(74,222,128,0.25); transform: translateY(-2px); }
+  .disguise-btn.selected { border-color: currentColor; box-shadow: 0 0 12px currentColor; }
+  .disguise-btn.p1.selected { color: #4ade80; background: rgba(74,222,128,0.25); }
+  .disguise-btn.p2.selected { color: #60a5fa; background: rgba(96,165,250,0.25); }
+  .player-tag { font-size: 0.72rem; padding: 4px 8px; border-radius: 8px; font-weight: bold; }
+  .player-tag.p1 { background: rgba(74,222,128,0.2); color: #4ade80; }
+  .player-tag.p2 { background: rgba(96,165,250,0.2); color: #60a5fa; }
+
+  #instructions { margin-top: 8px; font-size: 0.76rem; color: #888; text-align: center; max-width: 700px; line-height: 1.5; }
+
+  #overlay {
+    position: absolute; inset: 0; background: rgba(0,0,0,0.88);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 100; border-radius: 16px; text-align: center; padding: 24px;
+  }
+  #overlay.hidden { display: none; }
+  #overlay h2 { font-size: 1.9rem; margin-bottom: 10px; }
+  #overlay p { color: #ccc; margin-bottom: 14px; max-width: 460px; font-size: 0.9rem; line-height: 1.5; }
+  #overlay button {
+    padding: 11px 26px; font-size: 1rem; font-weight: bold; margin: 4px;
+    background: linear-gradient(135deg, #4ade80, #22c55e); color: #052e16;
+    border: none; border-radius: 10px; cursor: pointer; transition: transform 0.15s;
+  }
+  #overlay button:hover { transform: scale(1.05); }
+  #overlay button.alt { background: linear-gradient(135deg, #60a5fa, #3b82f6); color: #052e40; }
+
+  #scanPulse { position: absolute; inset: 0; background: radial-gradient(circle, transparent 30%, rgba(255,80,80,0.18) 100%); opacity: 0; pointer-events: none; z-index: 5; }
+  #scanPulse.flash { animation: scanFlash 0.5s; }
+  @keyframes scanFlash { 0%{opacity:1;} 100%{opacity:0;} }
+
+  .mode-btns { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+</style>
 </head>
 <body>
 
-    <div id="crosshair"></div>
-    <div id="ui">
-        <h1 style="margin-bottom: 15px;">PARKOUR 3D</h1>
-        <p style="margin-bottom: 10px;">Clique na tela para iniciar</p>
-        <p><b>WASD</b>: Mover | <b>ESPAÇO</b>: Pular / Wallrun</p>
-        <p><b>SHIFT / CTRL</b>: Deslizar (Slide) | <b>MOUSE</b>: Olhar</p>
+<h1>🙈 Esconde-Esconde: Vira Objeto! <span style="font-size:0.7rem;color:#4ade80">v2</span></h1>
+<div class="sub">P1: WASD + C (camuflar) · P2: Setas + Enter (camuflar)</div>
+
+<div id="hud">
+  <div><span class="p1">P1</span> Vida: <span id="lives1">3</span> ❤️ · Pontos: <span id="score1">0</span> · <span id="state1" class="danger">EXP</span></div>
+  <div><span class="p2">P2</span> Vida: <span id="lives2">3</span> ❤️ · Pontos: <span id="score2">0</span> · <span id="state2" class="danger">EXP</span></div>
+  <div>Nível: <span id="level">1</span> · Buscadores: <span id="seekerCount">1</span></div>
+</div>
+
+<div id="arena">
+  <div id="scanPulse"></div>
+  <div id="player1" class="player p1">🧍</div>
+  <div id="player2" class="player p2" style="display:none">🧍</div>
+  <div id="overlay">
+    <h2>😱 Escolha o modo de jogo</h2>
+    <p>Se esconda virando objetos do cenário! Camuflado = seguro. Movimento cancela o disfarce. Power-ups aparecem pelo mapa.</p>
+    <div class="mode-btns">
+      <button onclick="startGame(1)">1 Jogador</button>
+      <button class="alt" onclick="startGame(2)">2 Jogadores</button>
     </div>
-    <div id="hud">STATUS: NO CHÃO</div>
+  </div>
+</div>
 
-    <canvas id="renderCanvas"></canvas>
+<div id="panel">
+  <span class="player-tag p1">P1</span>
+  <div id="disguisePanel1" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+  <span class="player-tag p2" id="tagP2" style="display:none">P2</span>
+  <div id="disguisePanel2" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+</div>
 
-    <script>
-        // --- ENGINE 3D NATIVA (WEBGL) ---
-        const canvas = document.getElementById('renderCanvas');
-        const gl = canvas.getContext('webgl');
+<div id="instructions">
+  🎯 <b>Regras:</b> Escolha um disfarce e pressione a tecla de camuflar. <b>Camuflado + parado = seguro</b>. Se mover → perde disfarce. O olho do buscador tira vida de quem estiver exposto. Power-ups: ⚡ velocidade, 🛡️ escudo, ❄️ congela buscadores, 💰 pontos extras.
+</div>
 
-        if (!gl) { alert('WebGL não suportado neste navegador.'); }
+<script>
+/* ==================== CONSTANTES ==================== */
+const arena = document.getElementById('arena');
+const overlay = document.getElementById('overlay');
+const scanPulse = document.getElementById('scanPulse');
 
-        function resize() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            gl.viewport(0, 0, canvas.width, canvas.height);
+const W = () => arena.clientWidth;
+const H = () => arena.clientHeight;
+
+const DISGUISES = ['🪑','🛢️','📦','🌳','🏺','💡'];
+const POWERUPS = [
+  { emoji: '⚡', type: 'speed', name: 'Velocidade' },
+  { emoji: '🛡️', type: 'shield', name: 'Escudo' },
+  { emoji: '❄️', type: 'freeze', name: 'Congelar' },
+  { emoji: '💰', type: 'points', name: 'Pontos' },
+];
+
+let state = null;
+
+/* ==================== INÍCIO ==================== */
+function startGame(numPlayers) {
+  overlay.classList.add('hidden');
+  document.getElementById('player2').style.display = numPlayers === 2 ? 'flex' : 'none';
+  document.getElementById('tagP2').style.display = numPlayers === 2 ? 'inline-block' : 'none';
+  document.getElementById('disguisePanel2').style.display = numPlayers === 2 ? 'flex' : 'none';
+
+  state = {
+    running: true,
+    numPlayers,
+    level: 1,
+    elapsed: 0,
+    lastTime: 0,
+    keys: {},
+    objects: [],
+    powerups: [],
+    seekers: [],
+    players: [
+      {
+        id: 1, el: document.getElementById('player1'),
+        x: W()*0.2, y: H()*0.6, w: 42, h: 42, speed: 170,
+        lives: 3, score: 0, disguised: false, disguiseEmoji: '🪑',
+        lastMove: 0, cooldown: 0, shield: 0, speedBoost: 0,
+        controls: { up:'w', down:'s', left:'a', right:'d', camo:'c' }
+      },
+      {
+        id: 2, el: document.getElementById('player2'),
+        x: W()*0.7, y: H()*0.6, w: 42, h: 42, speed: 170,
+        lives: 3, score: 0, disguised: false, disguiseEmoji: '📦',
+        lastMove: 0, cooldown: 0, shield: 0, speedBoost: 0,
+        controls: { up:'arrowup', down:'arrowdown', left:'arrowleft', right:'arrowright', camo:'enter' }
+      }
+    ].slice(0, numPlayers),
+    freezeTimer: 0,
+  };
+
+  // Reset visual
+  state.players.forEach(p => {
+    p.el.style.left = p.x + 'px';
+    p.el.style.top = p.y + 'px';
+    p.el.textContent = '🧍';
+    p.el.className = 'player p' + p.id;
+    p.el.style.background = 'transparent';
+  });
+
+  buildLevel();
+  buildPanels();
+  spawnSeekers();
+  updateHUD();
+
+  requestAnimationFrame(loop);
+}
+
+/* ==================== CENÁRIO ==================== */
+function buildLevel() {
+  document.querySelectorAll('.obj').forEach(e => e.remove());
+  state.objects = [];
+  const count = 10 + state.level * 2;
+  const cols = 6;
+  const cellW = W() / cols;
+  const cellH = (H() * 0.72) / Math.ceil(count / cols);
+  let placed = 0;
+  for (let row = 0; row < Math.ceil(count / cols); row++) {
+    for (let col = 0; col < cols && placed < count; col++) {
+      const emoji = DISGUISES[Math.floor(Math.random() * DISGUISES.length)];
+      const x = col * cellW + 8 + Math.random() * (cellW - 55);
+      const y = 16 + row * cellH + Math.random() * (cellH - 50);
+      const el = document.createElement('div');
+      el.className = 'obj';
+      el.textContent = emoji;
+      el.style.left = x + 'px'; el.style.top = y + 'px';
+      el.style.width = '42px'; el.style.height = '42px';
+      arena.appendChild(el);
+      state.objects.push({ el, x, y, w: 42, h: 42, emoji });
+      placed++;
+    }
+  }
+}
+
+/* ==================== PAINÉIS DE DISFARCE ==================== */
+function buildPanels() {
+  const available = [...new Set(state.objects.map(o => o.emoji))];
+  [1, 2].forEach(id => {
+    const panel = document.getElementById('disguisePanel' + id);
+    panel.innerHTML = '';
+    const player = state.players.find(p => p.id === id);
+    if (!player) return;
+    available.forEach(emoji => {
+      const btn = document.createElement('button');
+      btn.className = 'disguise-btn p' + id;
+      btn.textContent = emoji;
+      btn.onclick = () => {
+        player.disguiseEmoji = emoji;
+        panel.querySelectorAll('.disguise-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        if (player.disguised) player.el.textContent = emoji;
+      };
+      panel.appendChild(btn);
+    });
+  });
+}
+
+/* ==================== BUSCADORES ==================== */
+function spawnSeekers() {
+  state.seekers.forEach(s => s.el.remove());
+  state.seekers = [];
+  const n = Math.min(1 + Math.floor(state.level / 2), 3);
+  for (let i = 0; i < n; i++) {
+    const el = document.createElement('div');
+    el.className = 'seekerEye active' + (i % 2 === 1 ? ' blue' : '');
+    arena.appendChild(el);
+    state.seekers.push({
+      el,
+      angle: (Math.PI * 2 / n) * i,
+      speed: 1.1 + state.level * 0.12,
+      radiusX: W() * (0.3 + 0.04 * i),
+      radiusY: H() * (0.26 + 0.03 * i),
+      phase: Math.random() * Math.PI * 2,
+    });
+  }
+}
+
+/* ==================== POWER-UPS ==================== */
+let powerupTimer = 0;
+function spawnPowerup() {
+  const p = POWERUPS[Math.floor(Math.random() * POWERUPS.length)];
+  const x = 30 + Math.random() * (W() - 90);
+  const y = 20 + Math.random() * (H() * 0.65);
+  const el = document.createElement('div');
+  el.className = 'powerup';
+  el.textContent = p.emoji;
+  el.style.left = x + 'px'; el.style.top = y + 'px';
+  arena.appendChild(el);
+  state.powerups.push({ el, x, y, w: 40, h: 40, type: p.type, emoji: p.emoji, life: 10 });
+}
+
+/* ==================== INPUT ==================== */
+document.addEventListener('keydown', e => {
+  if (!state) return;
+  const k = e.key.toLowerCase();
+  state.keys[k] = true;
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+
+  // Camuflar
+  state.players.forEach(p => {
+    if (p.controls.camo === k) toggleDisguise(p);
+  });
+});
+document.addEventListener('keyup', e => {
+  if (!state) return;
+  state.keys[e.key.toLowerCase()] = false;
+});
+
+function toggleDisguise(p) {
+  if (!state.running || p.cooldown > 0) return;
+  p.disguised = !p.disguised;
+  if (p.disguised) {
+    p.el.textContent = p.disguiseEmoji;
+    p.el.classList.add('disguised');
+    p.el.style.background = 'rgba(74,222,128,0.12)';
+  } else {
+    p.el.textContent = '🧍';
+    p.el.classList.remove('disguised');
+    p.el.style.background = 'transparent';
+  }
+  updateHUD();
+}
+
+/* ==================== LOOP ==================== */
+function loop(t) {
+  if (!state.running) return;
+  if (!state.lastTime) state.lastTime = t;
+  const dt = Math.min((t - state.lastTime) / 1000, 0.05);
+  state.lastTime = t;
+  state.elapsed += dt;
+
+  if (state.freezeTimer > 0) state.freezeTimer -= dt;
+
+  updatePlayers(dt);
+  updateSeekers(dt);
+  updatePowerups(dt);
+  checkPowerupPickup();
+  checkDetection();
+  checkLevelUp();
+  updateHUD();
+
+  requestAnimationFrame(loop);
+}
+
+/* ==================== PLAYERS ==================== */
+function updatePlayers(dt) {
+  state.players.forEach(p => {
+    if (p.cooldown > 0) p.cooldown -= dt;
+    if (p.shield > 0) p.shield -= dt;
+    if (p.speedBoost > 0) p.speedBoost -= dt;
+
+    let dx = 0, dy = 0;
+    const k = state.keys;
+    if (k[p.controls.left]) dx -= 1;
+    if (k[p.controls.right]) dx += 1;
+    if (k[p.controls.up]) dy -= 1;
+    if (k[p.controls.down]) dy += 1;
+
+    if (dx || dy) {
+      const len = Math.hypot(dx, dy);
+      dx /= len; dy /= len;
+      const spd = p.speed * (p.speedBoost > 0 ? 1.6 : 1);
+      p.x += dx * spd * dt;
+      p.y += dy * spd * dt;
+      p.x = Math.max(0, Math.min(W() - p.w, p.x));
+      p.y = Math.max(0, Math.min(H() - p.h - 8, p.y));
+      p.lastMove = state.elapsed;
+
+      // Mover cancela disfarce
+      if (p.disguised) {
+        p.disguised = false;
+        p.el.textContent = '🧍';
+        p.el.classList.remove('disguised');
+        p.el.style.background = 'transparent';
+      }
+    }
+
+    p.el.style.left = p.x + 'px';
+    p.el.style.top = p.y + 'px';
+
+    // Efeito visual de escudo
+    p.el.style.border = p.shield > 0 ? '3px solid #facc15' : (p.disguised ? '' : 'none');
+  });
+}
+
+/* ==================== SEEKERS ==================== */
+function updateSeekers(dt) {
+  const frozen = state.freezeTimer > 0;
+  state.seekers.forEach((s, i) => {
+    if (!frozen) s.angle += dt * s.speed;
+    const cx = W() / 2, cy = H() * 0.4;
+    const x = cx + Math.cos(s.angle + s.phase) * s.radiusX - 38;
+    const y = cy + Math.sin(s.angle * 1.5 + s.phase) * s.radiusY - 38;
+    s.x = x; s.y = y;
+    s.el.style.left = x + 'px';
+    s.el.style.top = y + 'px';
+    s.el.style.opacity = frozen ? 0.4 : 1;
+  });
+}
+
+/* ==================== POWER-UPS ==================== */
+function updatePowerups(dt) {
+  powerupTimer += dt;
+  const maxPowerups = 2 + Math.floor(state.level / 2);
+  if (powerupTimer > 5 && state.powerups.length < maxPowerups) {
+    spawnPowerup();
+    powerupTimer = 0;
+  }
+
+  state.powerups.forEach((p, idx) => {
+    p.life -= dt;
+    if (p.life <= 0) {
+      p.el.remove();
+      state.powerups.splice(idx, 1);
+    }
+  });
+}
+
+function checkPowerupPickup() {
+  state.powerups.forEach((p, idx) => {
+    state.players.forEach(player => {
+      const dx = (player.x + 21) - (p.x + 20);
+      const dy = (player.y + 21) - (p.y + 20);
+      if (Math.hypot(dx, dy) < 32) {
+        applyPowerup(player, p.type);
+        p.el.remove();
+        state.powerups.splice(idx, 1);
+      }
+    });
+  });
+}
+
+function applyPowerup(player, type) {
+  switch(type) {
+    case 'speed': player.speedBoost = 5; break;
+    case 'shield': player.shield = 6; break;
+    case 'freeze': state.freezeTimer = 4; break;
+    case 'points': player.score += 10; break;
+  }
+}
+
+/* ==================== DETECÇÃO (simplificada) ==================== */
+function checkDetection() {
+  state.players.forEach(p => {
+    if (p.cooldown > 0) return;
+
+    state.seekers.forEach(s => {
+      const eyeCX = s.x + 38, eyeCY = s.y + 38;
+      const pCX = p.x + 21, pCY = p.y + 21;
+      if (Math.hypot(eyeCX - pCX, eyeCY - pCY) < 48) {
+        // Se camuflado (parado ou não, não importa mais) = seguro
+        if (p.disguised) {
+          p.score += 1;
+          return;
         }
-        window.addEventListener('resize', resize);
-
-        const vsSource = `
-            attribute vec3 aPosition;
-            attribute vec3 aNormal;
-            attribute vec3 aColor;
-
-            uniform mat4 uModel;
-            uniform mat4 uView;
-            uniform mat4 uProjection;
-
-            varying vec3 vNormal;
-            varying vec3 vColor;
-            varying vec3 vPosition;
-
-            void main() {
-                vec4 worldPos = uModel * vec4(aPosition, 1.0);
-                vPosition = worldPos.xyz;
-                vNormal = mat3(uModel) * aNormal;
-                vColor = aColor;
-                gl_Position = uProjection * uView * worldPos;
-            }
-        `;
-
-        const fsSource = `
-            precision mediump float;
-
-            varying vec3 vNormal;
-            varying vec3 vColor;
-            varying vec3 vPosition;
-
-            uniform vec3 uLightPos;
-
-            void main() {
-                vec3 norm = normalize(vNormal);
-                vec3 lightDir = normalize(uLightPos - vPosition);
-                
-                float diff = max(dot(norm, lightDir), 0.2);
-                vec3 ambient = vec3(0.3, 0.3, 0.35);
-                vec3 lighting = ambient + vec3(0.8, 0.8, 0.7) * diff;
-
-                float dist = length(vPosition);
-                float fogFactor = clamp((dist - 10.0) / 100.0, 0.0, 1.0);
-                vec3 fogColor = vec3(0.5, 0.7, 0.9);
-
-                vec3 finalColor = mix(vColor * lighting, fogColor, fogFactor);
-                gl_FragColor = vec4(finalColor, 1.0);
-            }
-        `;
-
-        function createShader(gl, type, source) {
-            const shader = gl.createShader(type);
-            gl.shaderSource(shader, source);
-            gl.compileShader(shader);
-            return shader;
+        // Escudo absorve o dano
+        if (p.shield > 0) {
+          p.shield = 0;
+          p.cooldown = 1;
+          p.score += 2;
+          return;
         }
+        // Perde vida
+        p.lives--;
+        p.cooldown = 1.5;
+        scanPulse.classList.remove('flash');
+        void scanPulse.offsetWidth;
+        scanPulse.classList.add('flash');
+        p.el.classList.add('hit');
+        setTimeout(() => p.el.classList.remove('hit'), 500);
 
-        const program = gl.createProgram();
-        gl.attachShader(program, createShader(gl, gl.VERTEX_SHADER, vsSource));
-        gl.attachShader(program, createShader(gl, gl.FRAGMENT_SHADER, fsSource));
-        gl.linkProgram(program);
-        gl.useProgram(program);
-
-        const Mat4 = {
-            perspective: (fov, aspect, near, far) => {
-                const f = 1.0 / Math.tan(fov / 2);
-                const nf = 1 / (near - far);
-                return [
-                    f / aspect, 0, 0, 0,
-                    0, f, 0, 0,
-                    0, 0, (far + near) * nf, -1,
-                    0, 0, (2 * far * near) * nf, 0
-                ];
-            },
-            identity: () => [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1],
-            lookAt: (eye, target, up) => {
-                let z = normalize(sub(eye, target));
-                let x = normalize(cross(up, z));
-                let y = cross(z, x);
-                return [
-                    x[0], y[0], z[0], 0,
-                    x[1], y[1], z[1], 0,
-                    x[2], y[2], z[2], 0,
-                    -dot(x, eye), -dot(y, eye), -dot(z, eye), 1
-                ];
-            }
-        };
-
-        function sub(a, b) { return [a[0]-b[0], a[1]-b[1], a[2]-b[2]]; }
-        function cross(a, b) { return [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]]; }
-        function dot(a, b) { return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]; }
-        function normalize(v) { let len = Math.hypot(...v); return len > 0 ? [v[0]/len, v[1]/len, v[2]/len] : [0,0,0]; }
-
-        // --- CONSTRUÇÃO DO CENÁRIO ---
-        let vertices = [], normals = [], colors = [];
-        const blocks = [];
-
-        function addBox(x, y, z, w, h, d, color) {
-            blocks.push({ min: [x - w/2, y - h/2, z - d/2], max: [x + w/2, y + h/2, z + d/2] });
-
-            const x1 = x - w/2, x2 = x + w/2;
-            const y1 = y - h/2, y2 = y + h/2;
-            const z1 = z - d/2, z2 = z + d/2;
-
-            const faces = [
-                [x1,y1,z2, x2,y1,z2, x2,y2,z2, x1,y1,z2, x2,y2,z2, x1,y2,z2, 0,0,1],
-                [x2,y1,z1, x1,y1,z1, x1,y2,z1, x2,y1,z1, x1,y2,z1, x2,y2,z1, 0,0,-1],
-                [x1,y2,z1, x1,y2,z2, x2,y2,z2, x1,y2,z1, x2,y2,z2, x2,y2,z1, 0,1,0],
-                [x1,y1,z1, x2,y1,z1, x2,y1,z2, x1,y1,z1, x2,y1,z2, x1,y1,z2, 0,-1,0],
-                [x2,y1,z1, x2,y2,z1, x2,y2,z2, x2,y1,z1, x2,y2,z2, x2,y1,z2, 1,0,0],
-                [x1,y1,z1, x1,y1,z2, x1,y2,z2, x1,y1,z1, x1,y2,z2, x1,y2,z1, -1,0,0]
-            ];
-
-            faces.forEach(f => {
-                for(let i=0; i<18; i+=3) {
-                    vertices.push(f[i], f[i+1], f[i+2]);
-                    normals.push(f[18], f[19], f[20]);
-                    colors.push(...color);
-                }
-            });
+        if (p.lives <= 0) {
+          gameOver();
+          return;
         }
+        // Reposiciona
+        p.x = Math.random() * (W() - 60);
+        p.y = H() * 0.55 + Math.random() * (H() * 0.3);
+        p.el.style.left = p.x + 'px';
+        p.el.style.top = p.y + 'px';
+      }
+    });
+  });
+}
 
-        // --- MAPA EXPANDIDO DE PARKOUR ---
-        addBox(0, -1, 0, 40, 2, 40, [0.2, 0.2, 0.2]); // Chão principal
-        addBox(0, 4, -15, 10, 8, 10, [0.8, 0.2, 0.2]); // Bloco inicial
-        addBox(12, 8, -30, 2, 16, 20, [0.2, 0.5, 0.8]); // Wallrun 1 (Direita)
-        
-        // Novos Obstáculos
-        addBox(0, 10, -42, 6, 2, 6, [0.9, 0.6, 0.1]); // Pilar intermediário
-        addBox(-12, 12, -55, 2, 20, 22, [0.2, 0.5, 0.8]); // Wallrun 2 (Esquerda)
-        addBox(-2, 13, -72, 8, 2, 8, [0.9, 0.6, 0.1]); // Plataforma elevada
-        addBox(10, 15, -88, 8, 2, 8, [0.9, 0.6, 0.1]); // Plataforma em balanço
-        
-        addBox(0, 17, -110, 20, 2, 20, [0.2, 0.8, 0.3]); // Plataforma Final
+/* ==================== NÍVEL ==================== */
+function checkLevelUp() {
+  if (state.elapsed > state.level * 25 && state.running) {
+    state.level++;
+    buildLevel();
+    buildPanels();
+    spawnSeekers();
+  }
+}
 
-        function bindBuffer(data, loc, size) {
-            const b = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, b);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
-            gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0);
-            gl.enableVertexAttribArray(loc);
-        }
+/* ==================== HUD ==================== */
+function updateHUD() {
+  state.players.forEach(p => {
+    document.getElementById('lives' + p.id).textContent = Math.max(0, p.lives);
+    document.getElementById('score' + p.id).textContent = p.score;
+    const s = document.getElementById('state' + p.id);
+    s.textContent = p.disguised ? 'CAM' : 'EXP';
+    s.className = p.disguised ? 'ok' : 'danger';
+  });
+  document.getElementById('level').textContent = state.level;
+  document.getElementById('seekerCount').textContent = state.seekers.length;
+}
 
-        bindBuffer(vertices, gl.getAttribLocation(program, "aPosition"), 3);
-        bindBuffer(normals, gl.getAttribLocation(program, "aNormal"), 3);
-        bindBuffer(colors, gl.getAttribLocation(program, "aColor"), 3);
+/* ==================== FIM DE JOGO ==================== */
+function gameOver() {
+  state.running = false;
+  overlay.classList.remove('hidden');
 
-        const uModel = gl.getUniformLocation(program, "uModel");
-        const uView = gl.getUniformLocation(program, "uView");
-        const uProj = gl.getUniformLocation(program, "uProjection");
-        const uLight = gl.getUniformLocation(program, "uLightPos");
+  const results = state.players.map(p =>
+    `<div style="margin:6px 0;font-size:1rem">
+      <span style="color:${p.id===1?'#4ade80':'#60a5fa'};font-weight:bold">P${p.id}</span>
+      → ${p.score} pontos (${Math.max(0,p.lives)} vidas restantes)
+    </div>`
+  ).join('');
 
-        gl.uniform3fv(uLight, [20, 50, 20]);
-        gl.enable(gl.DEPTH_TEST);
-        resize();
+  let winner = '';
+  if (state.players.length === 2) {
+    const [a, b] = state.players;
+    if (a.score > b.score) winner = '<p style="color:#4ade80;font-size:1.2rem;font-weight:bold">🏆 P1 venceu!</p>';
+    else if (b.score > a.score) winner = '<p style="color:#60a5fa;font-size:1.2rem;font-weight:bold">🏆 P2 venceu!</p>';
+    else winner = '<p style="color:#facc15;font-size:1.2rem;font-weight:bold">🤝 Empate!</p>';
+  }
 
-        // --- SISTEMA DE FÍSICA E MECÂNICAS ---
-        const player = {
-            pos: [0, 3, 10],
-            vel: [0, 0, 0],
-            radius: 0.6,
-            standingEyeHeight: 1.8,
-            slidingEyeHeight: 0.9,
-            currentEyeHeight: 1.8,
-            onGround: false,
-            wallRunning: false,
-            isSliding: false,
-            slideTimer: 0
-        };
+  overlay.innerHTML = `
+    <h2>😵 Fim de jogo!</h2>
+    <p>Nível alcançado: <b>${state.level}</b></p>
+    <div style="background:rgba(255,255,255,0.08);padding:14px 24px;border-radius:12px;margin-bottom:14px">
+      ${results}
+    </div>
+    ${winner}
+    <div style="margin-top:14px">
+      <button onclick="startGame(${state.numPlayers})">Jogar Novamente</button>
+      <button class="alt" onclick="showMenu()">Menu</button>
+    </div>
+  `;
+}
 
-        let yaw = 0, pitch = 0;
-        const keys = {};
-
-        const ui = document.getElementById('ui');
-        const hud = document.getElementById('hud');
-
-        ui.addEventListener('click', () => canvas.requestPointerLock());
-
-        document.addEventListener('pointerlockchange', () => {
-            ui.style.display = (document.pointerLockElement === canvas) ? 'none' : 'block';
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (document.pointerLockElement !== canvas) return;
-            yaw -= e.movementX * 0.0025;
-            pitch -= e.movementY * 0.0025;
-            pitch = Math.max(-Math.PI/2 + 0.01, Math.min(Math.PI/2 - 0.01, pitch));
-        });
-
-        window.addEventListener('keydown', e => keys[e.code] = true);
-        window.addEventListener('keyup', e => keys[e.code] = false);
-
-        function checkCollisions() {
-            player.onGround = false;
-            player.wallRunning = false;
-
-            for (let b of blocks) {
-                let cx = Math.max(b.min[0], Math.min(player.pos[0], b.max[0]));
-                let cy = Math.max(b.min[1], Math.min(player.pos[1], b.max[1]));
-                let cz = Math.max(b.min[2], Math.min(player.pos[2], b.max[2]));
-
-                let dist = Math.hypot(player.pos[0] - cx, player.pos[1] - cy, player.pos[2] - cz);
-
-                if (dist < player.radius) {
-                    if (player.pos[1] > b.max[1] - 0.2 && player.vel[1] <= 0) {
-                        player.pos[1] = b.max[1] + player.radius;
-                        player.vel[1] = 0;
-                        player.onGround = true;
-                    } else {
-                        let nx = player.pos[0] - cx;
-                        let nz = player.pos[2] - cz;
-                        let len = Math.hypot(nx, nz);
-                        
-                        if (len > 0) {
-                            player.pos[0] = cx + (nx / len) * player.radius;
-                            player.pos[2] = cz + (nz / len) * player.radius;
-                        }
-
-                        if (!player.onGround && player.vel[1] < 0 && keys['KeyW']) {
-                            player.wallRunning = true;
-                            player.vel[1] = -0.05;
-                        }
-                    }
-                }
-            }
-        }
-
-        let lastTime = performance.now();
-
-        function update() {
-            const now = performance.now();
-            const dt = Math.min((now - lastTime) / 1000, 0.1);
-            lastTime = now;
-
-            if (document.pointerLockElement === canvas) {
-                let dx = Math.sin(yaw), dz = Math.cos(yaw);
-                let moveX = 0, moveZ = 0;
-
-                if (keys['KeyW']) { moveX -= dx; moveZ -= dz; }
-                if (keys['KeyS']) { moveX += dx; moveZ += dz; }
-                if (keys['KeyA']) { moveX -= dz; moveZ += dx; }
-                if (keys['KeyD']) { moveX += dz; moveZ -= dx; }
-
-                // Sistema de Slide
-                const slideKeyPressed = keys['ShiftLeft'] || keys['ControlLeft'];
-                let speed = 12.0;
-
-                if (slideKeyPressed && player.onGround && (moveX !== 0 || moveZ !== 0) && !player.isSliding) {
-                    player.isSliding = true;
-                    player.slideTimer = 0.6; // Duração do impulso do slide
-                }
-
-                if (player.isSliding) {
-                    player.slideTimer -= dt;
-                    speed = 18.0; // Velocidade extra no slide
-                    player.currentEyeHeight = player.slidingEyeHeight;
-
-                    if (player.slideTimer <= 0 || !player.onGround) {
-                        player.isSliding = false;
-                    }
-                } else {
-                    player.currentEyeHeight = player.standingEyeHeight;
-                }
-
-                player.pos[0] += moveX * speed * dt;
-                player.pos[2] += moveZ * speed * dt;
-
-                // Gravidade
-                if (!player.wallRunning) {
-                    player.vel[1] -= 28.0 * dt;
-                }
-
-                // Pulo
-                if (keys['Space']) {
-                    if (player.onGround) {
-                        player.vel[1] = 10.0;
-                        player.onGround = false;
-                        player.isSliding = false;
-                    } else if (player.wallRunning) {
-                        player.vel[1] = 9.0;
-                        player.wallRunning = false;
-                    }
-                }
-
-                player.pos[1] += player.vel[1] * dt;
-
-                // Queda Infinita (Reset)
-                if (player.pos[1] < -20) {
-                    player.pos = [0, 3, 10];
-                    player.vel = [0, 0, 0];
-                    player.isSliding = false;
-                }
-
-                checkCollisions();
-
-                // Atualizar HUD
-                if (player.isSliding) {
-                    hud.innerText = "STATUS: SLIDING!";
-                    hud.style.color = "#e040fb";
-                } else if (player.wallRunning) {
-                    hud.innerText = "STATUS: WALLRUNNING!";
-                    hud.style.color = "#40c4ff";
-                } else if (player.onGround) {
-                    hud.innerText = "STATUS: NO CHÃO";
-                    hud.style.color = "#ffffff";
-                } else {
-                    hud.innerText = "STATUS: NO AR";
-                    hud.style.color = "#ffab40";
-                }
-            }
-
-            // Renderizar Cena
-            gl.clearColor(0.5, 0.7, 0.9, 1.0);
-            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-            let cameraPos = [player.pos[0], player.pos[1] + (player.currentEyeHeight - player.standingEyeHeight), player.pos[2]];
-
-            let target = [
-                cameraPos[0] - Math.sin(yaw) * Math.cos(pitch),
-                cameraPos[1] + Math.sin(pitch),
-                cameraPos[2] - Math.cos(yaw) * Math.cos(pitch)
-            ];
-
-            let view = Mat4.lookAt(cameraPos, target, [0, 1, 0]);
-            let proj = Mat4.perspective(1.2, canvas.width / canvas.height, 0.1, 100.0);
-
-            gl.uniformMatrix4fv(uModel, false, Mat4.identity());
-            gl.uniformMatrix4fv(uView, false, view);
-            gl.uniformMatrix4fv(uProj, false, proj);
-
-            gl.drawArrays(gl.TRIANGLES, 0, vertices.length / 3);
-
-            requestAnimationFrame(update);
-        }
-
-        requestAnimationFrame(update);
-    </script>
+function showMenu() {
+  state.running = false;
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = `
+    <h2>😱 Escolha o modo de jogo</h2>
+    <p>Se esconda virando objetos do cenário! Camuflado = seguro. Movimento cancela o disfarce.</p>
+    <div class="mode-btns">
+      <button onclick="startGame(1)">1 Jogador</button>
+      <button class="alt" onclick="startGame(2)">2 Jogadores</button>
+    </div>
+  `;
+  document.querySelectorAll('.obj, .powerup, .seekerEye').forEach(e => e.remove());
+}
+</script>
 </body>
 </html>
